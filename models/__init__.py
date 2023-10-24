@@ -1,0 +1,1 @@
+from .maskbert import BertForSequenceClassification
