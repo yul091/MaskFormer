@@ -13,14 +13,6 @@ from transformers.models.bert.modeling_bert import (
     SequenceClassifierOutput,
 )
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(message)s',
-    datefmt='%m/%d/%Y %H:%M:%S',
-    level=logging.INFO,
-    filemode='w',
-    filename='maskbert.log',
-)
-
 
 class BertEncoder(nn.Module):
     def __init__(self, config, mask_rate=0):
@@ -397,32 +389,52 @@ if __name__ == '__main__':
     import time
     import numpy as np
     from tqdm import tqdm
-    from transformers import AutoConfig, AutoTokenizer
+    from torch.utils.data import DataLoader
+    from datasets import load_dataset
+    from transformers import AutoConfig, AutoTokenizer, DataCollatorWithPadding
+    
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(message)s',
+        datefmt='%m/%d/%Y %H:%M:%S',
+        level=logging.INFO,
+        filemode='w',
+        filename='loggings/maskbert.log',
+    )
+    task_n = 'sst2'
+    dataset = load_dataset('glue', task_n)
+    eval_dataset = dataset['validation']
+    print(eval_dataset)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_name_or_path = 'bert-large-uncased'
+    model_name_or_path = 'bert-large-cased'
     config = AutoConfig.from_pretrained(model_name_or_path)
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
     
-    input_texts = [
-        "Given that the current pandemic situation is not good, we should stay at home.",
-        "Do you know that the current pandemic situation is not good?",
-        "Wow, I have a new car! You wanna see it?",
-        "Key, wallet, phone, and mask. These are the things you should bring when you go out.",
-        "Would you mind if I ask you a question?",
-    ]
-    inputs = tokenizer(input_texts, padding=True, truncation=True, return_tensors='pt')
+    # Prepare data
+    def tokenize_data(examples):
+        return tokenizer(examples['sentence'], truncation=True)
     
-    for mask_rate in np.arange(0, 1.1, 0.1):
+    collate_fn = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
+    eval_dataset = eval_dataset.map(tokenize_data, batched=True).remove_columns(['sentence'])
+    eval_dataloader = DataLoader(
+        eval_dataset, 
+        batch_size=8, 
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
+    
+    for mask_rate in np.arange(0, 0.6, 0.1):
+        model_path = f'results/{task_n}/{model_name_or_path}/{mask_rate}'
         model = BertForSequenceClassification.from_pretrained(
-            model_name_or_path, 
+            model_path, 
             config=config, 
             mask_rate=mask_rate,
         ).to(device)
         
         model.eval()
         start = time.time()
-        for _ in tqdm(range(1000)):
+        # for _ in tqdm(range(1000)):
+        for step, batch in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
             inputs = {k: v.to(device) for k, v in inputs.items()}
             with torch.no_grad():
                 outputs = model(**inputs)
