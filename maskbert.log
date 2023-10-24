@@ -1,0 +1,1 @@
+10/23/2023 22:50:43 - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1distributed training: True, 16-bits training: False

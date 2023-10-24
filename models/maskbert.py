@@ -59,6 +59,7 @@ class BertEncoder(nn.Module):
         ############################################################################################
         num_to_skip = int(self.config.num_hidden_layers * self.mask_rate)
         layers_to_skip = set(torch.randperm(self.config.num_hidden_layers)[:num_to_skip].numpy())
+        # print(f'layers_to_skip: {layers_to_skip}')
         ############################################################################################
         
         for i, layer_module in enumerate(self.layer):
